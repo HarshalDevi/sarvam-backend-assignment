@@ -1,0 +1,1 @@
+"""Sarvam backend assignment service."""

@@ -1,0 +1,15 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+uvicorn.log
+uvicorn.err.log
+.DS_Store
+.vscode/
+
+server.pid
