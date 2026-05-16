@@ -20,13 +20,13 @@ Example estimate shape:
 
 ```json
 {
-  "queue_position": 4,
-  "estimated_wait_seconds": 1.2,
-  "estimated_processing_seconds": 4.2,
-  "estimated_completion_seconds": 5.4,
-  "estimated_batch_count": 8,
-  "estimated_prompt_tokens": 4200,
-  "estimated_completion_tokens": 384
+  "queue_position": 0,
+  "estimated_wait_seconds": 0.0,
+  "estimated_processing_seconds": 0.44,
+  "estimated_completion_seconds": 0.44,
+  "estimated_batch_count": 1,
+  "estimated_prompt_tokens": 283,
+  "estimated_completion_tokens": 192
 }
 ```
 
