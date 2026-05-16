@@ -20,13 +20,16 @@ Example estimate shape:
 
 ```json
 {
-  "queue_position": 0,
-  "estimated_wait_seconds": 0.0,
-  "estimated_processing_seconds": 0.44,
-  "estimated_completion_seconds": 0.44,
-  "estimated_batch_count": 1,
-  "estimated_prompt_tokens": 283,
-  "estimated_completion_tokens": 192
+  "request_id": "req_c3961f32a97d40a6a5a627f7665c84ad",
+  "estimate": {
+    "queue_position": 0,
+    "estimated_wait_seconds": 0.0,
+    "estimated_processing_seconds": 0.44,
+    "estimated_completion_seconds": 0.44,
+    "estimated_batch_count": 1,
+    "estimated_prompt_tokens": 283,
+    "estimated_completion_tokens": 192
+  }
 }
 ```
 
