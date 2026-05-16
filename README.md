@@ -122,10 +122,11 @@ Local development uses `LLM_PROVIDER=mock`. To call Sarvam:
 export LLM_PROVIDER=sarvam
 export SARVAM_API_KEY=<your-key>
 export SARVAM_API_URL=https://api.sarvam.ai/v1/chat/completions
+export SARVAM_MODEL=sarvam-30b
 uvicorn app.main:app
 ```
 
-The provider expects a chat-completions-style JSON response. If the public API shape differs, only `app/services/llm_client.py` needs to change because the rest of the pipeline depends on the provider interface.
+The provider expects Sarvam's chat-completions-style JSON response from `/v1/chat/completions`. If the public API shape differs, only `app/services/llm_client.py` needs to change because the rest of the pipeline depends on the provider interface.
 
 ## Batching Strategy
 
@@ -151,6 +152,12 @@ The API always attempts to return successful work. If one LLM batch fails perman
 - retry attempts
 - failure reason
 - retryable flag
+
+## Processing Estimate and Backpressure
+
+Every response includes an `estimate` object with queue position, estimated wait time, estimated processing time, estimated completion time, estimated batch count, and estimated token usage. The estimate is computed immediately after queue reservation and before provider batch execution begins.
+
+If queue capacity would be exceeded, the request is rejected immediately with HTTP 429 instead of allowing unbounded memory growth or unpredictable tail latency.
 
 ## Observability
 

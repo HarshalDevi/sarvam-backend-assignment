@@ -2,6 +2,8 @@
 
 Benchmarks use the mock LLM provider so the suite is deterministic and can run in CI without spending API credits. The goal is to measure the pipeline effects of batching, async scheduling, token estimation, and partial-failure accounting. Real Sarvam API benchmarks should be run with `LLM_PROVIDER=sarvam` in a staging account and compared against this baseline.
 
+Cost values are illustrative estimates based on configured prompt/completion token prices. They are intended to compare batch sizes under the same assumptions, not to represent exact provider billing.
+
 Command:
 
 ```bash

@@ -9,6 +9,8 @@ The benchmark suite measures:
 - estimated cost
 - failure rate
 
+Cost estimates are illustrative and derived from configured prompt/completion token prices in the service settings. They are used for comparative batch-size analysis, not as a claim of exact Sarvam billing.
+
 Batch sizes tested:
 
 - 1

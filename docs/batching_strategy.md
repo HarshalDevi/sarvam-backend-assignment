@@ -11,3 +11,23 @@ This gives high throughput for short tickets while safely splitting long tickets
 The token estimator is deliberately conservative. It takes the larger of lexical-token estimate and character-count estimate, then adds fixed JSON/prompt overhead. Production systems would replace this with provider-native tokenization when available.
 
 Failure amplification is bounded to one adaptive batch. A 500-ticket request usually becomes 10 provider calls; if one provider call fails permanently, the API can still return the other 450 successes and 50 failures.
+
+## Immediate Estimate and Admission Control
+
+Before provider calls begin, the processor reserves lightweight queue capacity and returns estimate metadata in the API response. The estimate includes queue position, estimated wait seconds, estimated processing seconds, estimated completion seconds, estimated batch count, estimated prompt tokens, and estimated completion tokens.
+
+Example estimate shape:
+
+```json
+{
+  "queue_position": 4,
+  "estimated_wait_seconds": 1.2,
+  "estimated_processing_seconds": 4.2,
+  "estimated_completion_seconds": 5.4,
+  "estimated_batch_count": 8,
+  "estimated_prompt_tokens": 4200,
+  "estimated_completion_tokens": 384
+}
+```
+
+If the queue reservation would exceed configured capacity, the API rejects the request with HTTP 429. This is intentional backpressure: it protects memory, keeps latency bounded, and tells clients to retry later instead of silently accepting work the service cannot process predictably.

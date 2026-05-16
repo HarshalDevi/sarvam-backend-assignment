@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["mock", "sarvam"] = "mock"
     sarvam_api_key: str | None = Field(default=None, alias="SARVAM_API_KEY")
     sarvam_api_url: str = "https://api.sarvam.ai/v1/chat/completions"
-    sarvam_model: str = "sarvam-m"
+    sarvam_model: str = "sarvam-30b"
 
     request_timeout_seconds: float = 12.0
     max_retries: int = 4
