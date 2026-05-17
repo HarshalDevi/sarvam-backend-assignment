@@ -16,13 +16,13 @@ Live Sarvam command when an API key is available:
 LLM_PROVIDER=sarvam SARVAM_API_KEY=<key> python benchmarks/benchmark.py --iterations 10 --provider sarvam
 ```
 
-Live Sarvam API sanity checks through `POST /tickets/process`:
+Live Sarvam single-run sanity benchmark through `POST /tickets/process`:
 
-| Batch size | status | success_count | failure_count | elapsed_ms | live tickets/sec | Notes |
-|---:|---|---:|---:|---:|---:|---|
-| 1 | succeeded | 1 | 0 | 9730.873 | 0.10 | Single-ticket live provider check |
-| 10 | succeeded | 10 | 0 | 111499.662 | 0.09 | Larger structured JSON response |
-| 50 | succeeded | 50 | 0 | 313183.973 | 0.16 | Required live large-batch sanity check |
+| Batch size | elapsed ms | live tickets/sec | prompt tokens | completion tokens | est. cost USD | failure rate |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 9730.873 | 0.10 | 207 | 48 | 0.00006 | 0.00% |
+| 10 | 111499.662 | 0.09 | 439 | 480 | 0.00035 | 0.00% |
+| 50 | 313183.973 | 0.16 | 1475 | 2400 | 0.00166 | 0.00% |
 
 Verified local mock benchmark table:
 
