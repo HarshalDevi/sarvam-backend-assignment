@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 
 from app.core.config import Settings
 from app.services.batching import AdaptiveBatcher
-from app.services.llm_client import LLMClient, MockLLMProvider
+from app.services.llm_client import LLMClient, MockLLMProvider, SarvamLLMProvider
 from app.services.processing import TicketProcessor
 from app.services.queue_manager import QueueManager
 from app.services.retry import RetryPolicy
@@ -42,19 +42,20 @@ class BenchmarkResult:
     failure_rate: float
 
 
-def build_processor(max_batch_size: int) -> TicketProcessor:
-    settings = Settings(max_tickets_per_llm_batch=max_batch_size, provider_concurrency=8)
+def build_processor(max_batch_size: int, provider_name: str) -> TicketProcessor:
+    settings = Settings(max_tickets_per_llm_batch=max_batch_size, provider_concurrency=8, llm_provider=provider_name)
     estimator = TokenEstimator()
+    provider = SarvamLLMProvider(settings) if provider_name == "sarvam" else MockLLMProvider(latency_seconds=0.025)
     return TicketProcessor(
         settings=settings,
         batcher=AdaptiveBatcher(settings, estimator),
-        llm_client=LLMClient(MockLLMProvider(latency_seconds=0.025), RetryPolicy(base_delay_seconds=0.001), 2),
+        llm_client=LLMClient(provider, RetryPolicy(base_delay_seconds=0.001), settings.request_timeout_seconds),
         queue_manager=QueueManager(10_000, settings.nominal_tickets_per_second),
     )
 
 
-async def run_case(batch_size: int, iterations: int) -> BenchmarkResult:
-    processor = build_processor(batch_size)
+async def run_case(batch_size: int, iterations: int, provider_name: str) -> BenchmarkResult:
+    processor = build_processor(batch_size, provider_name)
     latencies: list[float] = []
     total_tickets = 0
     failures = 0
@@ -92,8 +93,9 @@ async def run_case(batch_size: int, iterations: int) -> BenchmarkResult:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=30)
+    parser.add_argument("--provider", choices=["mock", "sarvam"], default="mock")
     args = parser.parse_args()
-    results = [await run_case(size, args.iterations) for size in (1, 10, 50)]
+    results = [await run_case(size, args.iterations, args.provider) for size in (1, 10, 50)]
     print("| Batch size | p50 latency ms | p95 latency ms | tickets/sec | prompt tokens | completion tokens | cost USD | failure rate |")
     print("|---:|---:|---:|---:|---:|---:|---:|---:|")
     for result in results:

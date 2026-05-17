@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from app.core.config import Settings
+from app.models.internal_models import TicketBatch
 from app.models.response_models import ProcessTicketsResponse, TicketFailure, TicketResult
 from app.services.batching import AdaptiveBatcher
 from app.services.llm_client import LLMClient
@@ -42,7 +43,7 @@ class TicketProcessor:
         with timer() as elapsed_ms:
             try:
                 batch_results = await asyncio.gather(
-                    *(self._process_batch(batch) for batch in batches),
+                    *(self._process_batch_resilient(batch) for batch in batches),
                     return_exceptions=True,
                 )
             finally:
@@ -65,7 +66,8 @@ class TicketProcessor:
                         )
                     continue
 
-                classifications, retries = outcome
+                classifications, retries, isolated_failures = outcome
+                failures.extend(isolated_failures)
                 for classification in classifications:
                     successes.append(
                         TicketResult(
@@ -79,8 +81,9 @@ class TicketProcessor:
                     TICKETS_TOTAL.labels(outcome="success", category=classification.category.value).inc()
 
                 returned_indexes = {classification.ticket_index for classification in classifications}
+                failed_indexes = {failure.ticket_index for failure in isolated_failures}
                 for item in batch.items:
-                    if item.index not in returned_indexes:
+                    if item.index not in returned_indexes and item.index not in failed_indexes:
                         failures.append(
                             TicketFailure(
                                 ticket_index=item.index,
@@ -122,3 +125,46 @@ class TicketProcessor:
             except Exception as exc:
                 logger.warning("batch_failed", extra={"batch_id": batch.batch_id}, exc_info=exc)
                 raise
+
+    async def _process_batch_resilient(self, batch: TicketBatch) -> tuple[list, int, list[TicketFailure]]:
+        try:
+            classifications, retries = await self._process_batch(batch)
+            return classifications, retries, []
+        except Exception as exc:
+            if len(batch.items) <= 1:
+                item = batch.items[0]
+                return (
+                    [],
+                    self.settings.max_retries,
+                    [
+                        TicketFailure(
+                            ticket_index=item.index,
+                            error_type=exc.__class__.__name__,
+                            retry_attempts=self.settings.max_retries,
+                            failure_reason=str(exc),
+                            retryable=isinstance(exc, RetryableError),
+                        )
+                    ],
+                )
+
+            midpoint = len(batch.items) // 2
+            left = TicketBatch(
+                batch_id=f"{batch.batch_id}_left",
+                items=batch.items[:midpoint],
+                prompt_tokens=max(1, batch.prompt_tokens // 2),
+                estimated_completion_tokens=batch.estimated_completion_tokens // 2,
+            )
+            right = TicketBatch(
+                batch_id=f"{batch.batch_id}_right",
+                items=batch.items[midpoint:],
+                prompt_tokens=max(1, batch.prompt_tokens - left.prompt_tokens),
+                estimated_completion_tokens=batch.estimated_completion_tokens - left.estimated_completion_tokens,
+            )
+            left_result, right_result = await asyncio.gather(
+                self._process_batch_resilient(left),
+                self._process_batch_resilient(right),
+            )
+            classifications = [*left_result[0], *right_result[0]]
+            failures = [*left_result[2], *right_result[2]]
+            retries = max(left_result[1], right_result[1], self.settings.max_retries)
+            return classifications, retries, failures

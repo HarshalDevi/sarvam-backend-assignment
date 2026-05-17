@@ -8,7 +8,7 @@ from app.services.batching import AdaptiveBatcher
 from app.services.llm_client import LLMClient, LLMProvider, MockLLMProvider
 from app.services.processing import TicketProcessor
 from app.services.queue_manager import QueueManager
-from app.services.retry import RetryPolicy, RetryableError
+from app.services.retry import PermanentProviderError, RetryPolicy, RetryableError
 from app.services.token_estimator import TokenEstimator
 
 
@@ -21,6 +21,19 @@ class SelectiveFailProvider(LLMProvider):
     async def classify_batch(self, batch: TicketBatch):
         if any(item.index >= 2 for item in batch.items):
             raise RetryableError("upstream overloaded", reason="503")
+        return await self.mock.classify_batch(batch)
+
+
+class BadTicketProvider(LLMProvider):
+    name = "bad_ticket"
+
+    def __init__(self) -> None:
+        self.mock = MockLLMProvider(0)
+
+    async def classify_batch(self, batch: TicketBatch):
+        bad_items = [item for item in batch.items if "malformed" in item.text]
+        if bad_items:
+            raise PermanentProviderError("provider rejected malformed ticket")
         return await self.mock.classify_batch(batch)
 
 
@@ -38,3 +51,23 @@ async def test_partial_failure_keeps_successful_batches() -> None:
     assert response.success_count == 2
     assert response.failure_count == 2
     assert {failure.ticket_index for failure in response.failures} == {2, 3}
+
+
+@pytest.mark.asyncio
+async def test_failed_batch_is_split_to_isolate_bad_ticket() -> None:
+    settings = Settings(max_tickets_per_llm_batch=4, max_retries=1)
+    processor = TicketProcessor(
+        settings=settings,
+        batcher=AdaptiveBatcher(settings, TokenEstimator()),
+        llm_client=LLMClient(BadTicketProvider(), RetryPolicy(max_attempts=2, base_delay_seconds=0.001), 1),
+        queue_manager=QueueManager(100, 50),
+    )
+    response = await processor.process(
+        ["battery issue", "invoice problem", "malformed ticket payload", "driver crash"],
+        "req_test",
+        None,
+    )
+    assert response.status == "partial_success"
+    assert response.success_count == 3
+    assert response.failure_count == 1
+    assert response.failures[0].ticket_index == 2

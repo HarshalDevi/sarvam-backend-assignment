@@ -1,6 +1,6 @@
 # Sarvam Backend Assignment
 
-Production-grade FastAPI backend for batch enterprise ticket classification. The service accepts up to 500 raw support tickets, adaptively batches them for an LLM provider, applies bounded retries with jitter, returns partial successes, and exposes structured telemetry.
+FastAPI backend for batch enterprise ticket classification. The service accepts up to 500 raw support tickets, groups them into LLM batches, retries temporary failures with jitter, returns partial successes, and exposes structured telemetry.
 
 ## Features
 
@@ -114,7 +114,7 @@ Response shape:
 }
 ```
 
-## Sarvam Provider
+## Sarvam API Provider
 
 Local development uses `LLM_PROVIDER=mock`. To call Sarvam:
 
@@ -153,11 +153,11 @@ The API always attempts to return successful work. If one LLM batch fails perman
 - failure reason
 - retryable flag
 
-## Processing Estimate and Backpressure
+## Processing Estimate and Queue Backpressure
 
 Every response includes an `estimate` object with queue position, estimated wait time, estimated processing time, estimated completion time, estimated batch count, and estimated token usage. The estimate is computed immediately after queue reservation and before provider batch execution begins.
 
-If queue capacity would be exceeded, the request is rejected immediately with HTTP 429 instead of allowing unbounded memory growth or unpredictable tail latency.
+The local queue capacity is configured as ticket slots, with a default of 5,000 queued tickets. If that capacity would be exceeded, the request is rejected immediately with HTTP 429 instead of allowing memory growth or unpredictable latency.
 
 ## Observability
 
@@ -183,6 +183,12 @@ Coverage includes:
 - retry behavior
 - processing estimates
 - partial failure handling
+
+`tests/test_api.py` uses `httpx.AsyncClient` with FastAPI ASGI transport to call `POST /tickets/process` end-to-end without starting a network server.
+
+## CI/CD
+
+The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` that installs dependencies and runs `pytest -q` on every push and pull request.
 
 ## Benchmarks
 

@@ -6,31 +6,16 @@ The batcher estimates tokens for every ticket and builds batches that satisfy th
 - Prompt token ceiling: default 6,200 prompt tokens.
 - Context window ceiling: default 8,192 tokens including estimated completion.
 
-This gives high throughput for short tickets while safely splitting long tickets. Batch size 50 is a ceiling, not a forced size. If a single ticket is unusually long, it becomes its own batch so it cannot cause the entire request to overflow.
+In practice, this keeps short tickets efficient while still splitting long tickets safely. Batch size 50 is a ceiling, not a forced size. If a single ticket is unusually long, it becomes its own batch so it cannot cause the entire request to overflow.
 
-The token estimator is deliberately conservative. It takes the larger of lexical-token estimate and character-count estimate, then adds fixed JSON/prompt overhead. Production systems would replace this with provider-native tokenization when available.
+Provider batch calls are dispatched concurrently using `asyncio.gather`, bounded by a semaphore from `provider_concurrency`. This means a request with several adaptive batches does not wait for every provider call serially, while still limiting upstream pressure.
 
-Failure amplification is bounded to one adaptive batch. A 500-ticket request usually becomes 10 provider calls; if one provider call fails permanently, the API can still return the other 450 successes and 50 failures.
+The token estimator is deliberately conservative. It takes the larger of word-based estimate and character-count estimate, then adds fixed JSON/prompt overhead. In a hosted deployment, this can be swapped for provider-native tokenization when available.
 
-## Immediate Estimate and Admission Control
+Failure amplification is bounded by adaptive batching and split-and-retry isolation. A 500-ticket request usually becomes 10 provider calls. If one provider call fails permanently, the processor splits that failed batch into smaller halves and retries them, so good tickets can still be recovered instead of marking the full batch as failed.
+
+## Immediate Processing Estimate and Admission Control
 
 Before provider calls begin, the processor reserves lightweight queue capacity and returns estimate metadata in the API response. The estimate includes queue position, estimated wait seconds, estimated processing seconds, estimated completion seconds, estimated batch count, estimated prompt tokens, and estimated completion tokens.
 
-Example estimate shape:
-
-```json
-{
-  "request_id": "req_c3961f32a97d40a6a5a627f7665c84ad",
-  "estimate": {
-    "queue_position": 0,
-    "estimated_wait_seconds": 0.0,
-    "estimated_processing_seconds": 0.44,
-    "estimated_completion_seconds": 0.44,
-    "estimated_batch_count": 1,
-    "estimated_prompt_tokens": 283,
-    "estimated_completion_tokens": 192
-  }
-}
-```
-
-If the queue reservation would exceed configured capacity, the API rejects the request with HTTP 429. This is intentional backpressure: it protects memory, keeps latency bounded, and tells clients to retry later instead of silently accepting work the service cannot process predictably.
+Queue capacity is measured in ticket slots, with a default of 5,000 queued tickets. If the queue reservation would exceed that capacity, the API rejects the request with HTTP 429. This is intentional backpressure: it protects memory, keeps latency bounded, and tells clients to retry later instead of accepting work the service cannot process predictably.

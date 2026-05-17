@@ -36,7 +36,7 @@ Prometheus metrics are exposed at `/metrics`:
 
 ## Tracing Design
 
-The app stores request and correlation IDs in context variables so lower layers can attach the same identifiers. In a production deployment this would be connected to OpenTelemetry spans:
+The app stores request and correlation IDs in context variables so lower layers can attach the same identifiers. In a deployed version, these would map naturally to OpenTelemetry spans:
 
 - HTTP request span
 - queue reservation span
